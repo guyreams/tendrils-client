@@ -4,7 +4,6 @@
 PRESETS = {
     "fighter": {
         "name": "Gronk the Fighter",
-        "owner_id": "player1",
         "ability_scores": {
             "strength": 16,
             "dexterity": 12,
@@ -29,7 +28,6 @@ PRESETS = {
     },
     "rogue": {
         "name": "Shadow the Rogue",
-        "owner_id": "player2",
         "ability_scores": {
             "strength": 10,
             "dexterity": 16,
@@ -54,7 +52,6 @@ PRESETS = {
     },
     "barbarian": {
         "name": "Ragna the Barbarian",
-        "owner_id": "player3",
         "ability_scores": {
             "strength": 18,
             "dexterity": 10,
@@ -79,7 +76,6 @@ PRESETS = {
     },
     "monk": {
         "name": "Kira the Monk",
-        "owner_id": "player4",
         "ability_scores": {
             "strength": 10,
             "dexterity": 18,
@@ -107,29 +103,18 @@ PRESETS = {
 
 class GameSession:
     def __init__(self):
-        self.characters: dict[str, dict] = {}  # owner_id -> {character_id, name, owner_id}
-        self.active_character: str | None = None  # character_id currently controlled
+        self.character_id: str | None = None
+        self.character_name: str | None = None
+        self.has_character: bool = False
         self.game_status: str | None = None  # waiting, active, completed
 
+    def set_character(self, character_id: str, name: str):
+        self.character_id = character_id
+        self.character_name = name
+        self.has_character = True
+
     def reset(self):
-        self.characters.clear()
-        self.active_character = None
+        self.character_id = None
+        self.character_name = None
+        self.has_character = False
         self.game_status = None
-
-    def add_character(self, owner_id: str, character_id: str, name: str):
-        self.characters[owner_id] = {
-            "character_id": character_id,
-            "name": name,
-            "owner_id": owner_id,
-        }
-        if self.active_character is None:
-            self.active_character = character_id
-
-    def get_character_by_id(self, character_id: str) -> dict | None:
-        for char in self.characters.values():
-            if char["character_id"] == character_id:
-                return char
-        return None
-
-    def get_all_character_ids(self) -> list[str]:
-        return [c["character_id"] for c in self.characters.values()]

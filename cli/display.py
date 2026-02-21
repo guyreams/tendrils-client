@@ -242,9 +242,7 @@ def print_help():
     table.add_row("", "")
 
     table.add_row("[bold]Utility[/bold]", "")
-    table.add_row("switch OWNER_ID", "Switch active character")
     table.add_row("auto", "Auto-play current character")
-    table.add_row("demo", "Full automated demo game")
 
     console.print(table)
     console.print()

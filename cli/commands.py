@@ -47,12 +47,8 @@ def handle_command(cmd: str, client: TendrilsClient, session: GameSession) -> bo
             _cmd_disengage(client, session)
         elif verb in ("end", "done"):
             _cmd_end_turn(client, session)
-        elif verb == "switch":
-            _cmd_switch(args, session)
         elif verb == "auto":
             _cmd_auto(client, session)
-        elif verb == "demo":
-            _cmd_demo(client, session)
         else:
             display.print_error(f"Unknown command: '{verb}'. Type 'help' for commands.")
     except TendrilsAPIError as e:
@@ -85,7 +81,7 @@ def _cmd_join(args: list, client: TendrilsClient, session: GameSession):
     result = client.join_game(char_data)
     char_id = result["character_id"]
     message = result.get("message", "")
-    session.add_character(char_data["owner_id"], char_id, char_data["name"])
+    session.set_character(char_id, char_data["name"])
     if message:
         display.print_success(message)
     else:
@@ -95,7 +91,6 @@ def _cmd_join(args: list, client: TendrilsClient, session: GameSession):
 def _build_custom_character() -> dict:
     display.console.print("\n[bold]Custom Character Builder[/bold]\n")
     name = input("  Name: ").strip() or "Custom Hero"
-    owner_id = input("  Owner ID: ").strip() or "custom_player"
 
     def _int_input(prompt: str, default: int) -> int:
         val = input(f"  {prompt} [{default}]: ").strip()
@@ -122,7 +117,6 @@ def _build_custom_character() -> dict:
 
     return {
         "name": name,
-        "owner_id": owner_id,
         "max_hp": max_hp,
         "armor_class": armor_class,
         "speed": speed,
@@ -177,17 +171,16 @@ def _cmd_game_info(client: TendrilsClient, session: GameSession):
 # ── Combat ──────────────────────────────────────────────────────────────────
 
 
-def _require_active(session: GameSession) -> str | None:
-    """Return active character_id or print error and return None."""
-    if not session.active_character:
-        display.print_error("No active character. Join a game first.")
-        return None
-    return session.active_character
+def _require_character(session: GameSession) -> bool:
+    """Return True if we have a character, else print error."""
+    if not session.has_character:
+        display.print_error("No character. Join a game first.")
+        return False
+    return True
 
 
 def _cmd_move(args: list, client: TendrilsClient, session: GameSession):
-    char_id = _require_active(session)
-    if not char_id:
+    if not _require_character(session):
         return
     if len(args) < 2:
         display.print_error("Usage: move X Y")
@@ -199,7 +192,6 @@ def _cmd_move(args: list, client: TendrilsClient, session: GameSession):
         return
 
     result = client.submit_action({
-        "character_id": char_id,
         "action_type": "move",
         "target_position": [x, y],
     })
@@ -208,14 +200,10 @@ def _cmd_move(args: list, client: TendrilsClient, session: GameSession):
 
 
 def _cmd_attack(args: list, client: TendrilsClient, session: GameSession):
-    char_id = _require_active(session)
-    if not char_id:
+    if not _require_character(session):
         return
 
-    action = {
-        "character_id": char_id,
-        "action_type": "attack",
-    }
+    action = {"action_type": "attack"}
 
     if len(args) >= 1:
         action["target_id"] = args[0]
@@ -228,20 +216,15 @@ def _cmd_attack(args: list, client: TendrilsClient, session: GameSession):
 
 
 def _cmd_dodge(client: TendrilsClient, session: GameSession):
-    char_id = _require_active(session)
-    if not char_id:
+    if not _require_character(session):
         return
-    result = client.submit_action({
-        "character_id": char_id,
-        "action_type": "dodge",
-    })
+    result = client.submit_action({"action_type": "dodge"})
     display.print_action_result(result)
     _check_game_over(client, session)
 
 
 def _cmd_dash(args: list, client: TendrilsClient, session: GameSession):
-    char_id = _require_active(session)
-    if not char_id:
+    if not _require_character(session):
         return
     if len(args) < 2:
         display.print_error("Usage: dash X Y")
@@ -253,7 +236,6 @@ def _cmd_dash(args: list, client: TendrilsClient, session: GameSession):
         return
 
     result = client.submit_action({
-        "character_id": char_id,
         "action_type": "dash",
         "target_position": [x, y],
     })
@@ -262,25 +244,17 @@ def _cmd_dash(args: list, client: TendrilsClient, session: GameSession):
 
 
 def _cmd_disengage(client: TendrilsClient, session: GameSession):
-    char_id = _require_active(session)
-    if not char_id:
+    if not _require_character(session):
         return
-    result = client.submit_action({
-        "character_id": char_id,
-        "action_type": "disengage",
-    })
+    result = client.submit_action({"action_type": "disengage"})
     display.print_action_result(result)
     _check_game_over(client, session)
 
 
 def _cmd_end_turn(client: TendrilsClient, session: GameSession):
-    char_id = _require_active(session)
-    if not char_id:
+    if not _require_character(session):
         return
-    result = client.submit_action({
-        "character_id": char_id,
-        "action_type": "end_turn",
-    })
+    result = client.submit_action({"action_type": "end_turn"})
     display.print_action_result(result)
     _check_game_over(client, session)
 
@@ -289,21 +263,17 @@ def _cmd_end_turn(client: TendrilsClient, session: GameSession):
 
 
 def _cmd_status(client: TendrilsClient, session: GameSession):
-    char_id = session.active_character or (session.get_all_character_ids()[0] if session.characters else None)
-    if not char_id:
-        display.print_error("No characters joined yet.")
+    if not _require_character(session):
         return
-    state = client.get_state(char_id)
+    state = client.get_state()
     _update_session_from_state(state, session)
     display.print_state(state)
 
 
 def _cmd_map(client: TendrilsClient, session: GameSession):
-    char_id = session.active_character or (session.get_all_character_ids()[0] if session.characters else None)
-    if not char_id:
-        display.print_error("No characters joined yet.")
+    if not _require_character(session):
         return
-    state = client.get_state(char_id)
+    state = client.get_state()
     _update_session_from_state(state, session)
     display.print_map(state)
 
@@ -328,75 +298,16 @@ def _cmd_log(client: TendrilsClient, session: GameSession):
 # ── Utility ─────────────────────────────────────────────────────────────────
 
 
-def _cmd_switch(args: list, session: GameSession):
-    if not args:
-        display.print_error("Usage: switch OWNER_ID")
-        display.console.print("  Available owners:")
-        for oid, char in session.characters.items():
-            marker = " <-- active" if char["character_id"] == session.active_character else ""
-            display.console.print(f"    {oid}: {char['name']}{marker}")
-        return
-
-    owner_id = args[0]
-    if owner_id in session.characters:
-        session.active_character = session.characters[owner_id]["character_id"]
-        display.print_success(f"Switched to {session.characters[owner_id]['name']}")
-    else:
-        display.print_error(f"No character with owner_id '{owner_id}'. Use 'switch' to list.")
-
-
 def _cmd_auto(client: TendrilsClient, session: GameSession):
     """Auto-play current character with simple AI."""
-    char_id = _require_active(session)
-    if not char_id:
+    if not _require_character(session):
         return
 
     display.print_info("Auto-playing... (Ctrl+C to stop)")
     try:
-        _auto_play_loop(client, session, char_ids=[char_id])
+        _auto_play_loop(client, session)
     except KeyboardInterrupt:
         display.console.print("\n[yellow]Auto-play stopped.[/yellow]")
-
-
-def _cmd_demo(client: TendrilsClient, session: GameSession):
-    """Full automated demo game."""
-    display.console.print()
-
-    # 1. Join fighter and rogue
-    session.characters.clear()
-    session.active_character = None
-    for preset_name in ("fighter", "rogue"):
-        char_data = PRESETS[preset_name]
-        display.print_info(f"Joining {char_data['name']}...")
-        join_result = client.join_game(char_data)
-        char_id = join_result["character_id"]
-        message = join_result.get("message", "")
-        session.add_character(char_data["owner_id"], char_id, char_data["name"])
-        if message:
-            display.print_success(message)
-        else:
-            display.print_success(f"Joined! (ID: {char_id})")
-
-    # 2. Start combat
-    display.print_info("Starting combat...")
-    start_result = client.start_game()
-    session.game_status = "active"
-    display.print_success(start_result.get("message", "Combat started!"))
-
-    initiative = start_result.get("initiative_order", [])
-    if initiative:
-        display.console.print(f"  Initiative: {', '.join(str(i) for i in initiative)}")
-
-    # 3. Show initial state + map
-    _show_current_state(client, session)
-
-    # 4. Auto-play
-    display.console.print()
-    all_char_ids = session.get_all_character_ids()
-    try:
-        _auto_play_loop(client, session, char_ids=all_char_ids, delay=0.5)
-    except KeyboardInterrupt:
-        display.console.print("\n[yellow]Demo stopped.[/yellow]")
 
 
 # ── Internal Helpers ────────────────────────────────────────────────────────
@@ -404,11 +315,10 @@ def _cmd_demo(client: TendrilsClient, session: GameSession):
 
 def _show_current_state(client: TendrilsClient, session: GameSession):
     """Fetch and display current state + map."""
-    char_id = session.active_character or (session.get_all_character_ids()[0] if session.characters else None)
-    if not char_id:
+    if not session.has_character:
         return
     try:
-        state = client.get_state(char_id)
+        state = client.get_state()
         _update_session_from_state(state, session)
         display.print_state(state)
         display.print_map(state)
@@ -430,8 +340,7 @@ def _update_session_from_state(state: dict, session: GameSession):
 def _check_game_over(client: TendrilsClient, session: GameSession):
     """After an action, check if the game ended."""
     try:
-        char_id = session.active_character or session.get_all_character_ids()[0]
-        state = client.get_state(char_id)
+        state = client.get_state()
         _update_session_from_state(state, session)
 
         status = state.get("status")
@@ -444,8 +353,6 @@ def _check_game_over(client: TendrilsClient, session: GameSession):
 def _print_game_result(state: dict, client: TendrilsClient, session: GameSession):
     """Print the winner and final summary."""
     session.game_status = "completed"
-    # _all_characters works with /game/state responses; fall back to
-    # the "characters" list from /game responses.
     characters = _all_characters(state) or state.get("characters", [])
     round_num = state.get("round_number", state.get("round", 0))
     winner_id = state.get("winner_id")
@@ -480,7 +387,6 @@ def _print_game_result(state: dict, client: TendrilsClient, session: GameSession
 def _auto_play_loop(
     client: TendrilsClient,
     session: GameSession,
-    char_ids: list[str],
     delay: float = 0.3,
 ):
     """Simple AI loop: move toward nearest enemy, attack if adjacent."""
@@ -488,39 +394,27 @@ def _auto_play_loop(
     max_iterations = 200  # safety limit
 
     for _ in range(max_iterations):
-        # Try each of our character IDs until we find one where is_your_turn is True
-        state = None
-        turn_char_id = None
-
-        for cid in char_ids:
+        try:
+            state = client.get_state()
+        except TendrilsAPIError:
             try:
-                s = client.get_state(cid)
+                game = client.get_game()
+                if game.get("winner_id"):
+                    _print_game_result(game, client, session)
+                    return
             except TendrilsAPIError:
-                # Character may no longer exist after combat reset;
-                # check if the game ended via get_game().
-                try:
-                    game = client.get_game()
-                    if game.get("winner_id"):
-                        _print_game_result(game, client, session)
-                        return
-                except TendrilsAPIError:
-                    pass
-                continue
+                pass
+            time.sleep(delay)
+            continue
 
-            _update_session_from_state(s, session)
+        _update_session_from_state(state, session)
 
-            s_status = s.get("status")
-            if s_status == "completed" or (s_status == "waiting" and s.get("winner_id")):
-                _print_game_result(s, client, session)
-                return
+        s_status = state.get("status")
+        if s_status == "completed" or (s_status == "waiting" and state.get("winner_id")):
+            _print_game_result(state, client, session)
+            return
 
-            if s.get("is_your_turn"):
-                state = s
-                turn_char_id = cid
-                break
-
-        if not state or not turn_char_id:
-            # Not any of our characters' turn — wait and retry
+        if not state.get("is_your_turn"):
             time.sleep(delay)
             continue
 
@@ -536,14 +430,15 @@ def _auto_play_loop(
 
         # Find my character and enemies
         me = state.get("your_character")
+        my_id = me.get("id") if me else None
         enemies = []
         for c in characters:
             cid = c.get("id")
-            if cid != turn_char_id and c.get("current_hp", c.get("hp", 0)) > 0:
+            if cid != my_id and c.get("current_hp", c.get("hp", 0)) > 0:
                 enemies.append(c)
 
         if not me or not enemies:
-            _auto_end_turn(client, session, turn_char_id)
+            _auto_end_turn(client)
             time.sleep(delay)
             continue
 
@@ -559,21 +454,19 @@ def _auto_play_loop(
         # Simple AI: if adjacent (distance <= ~1.5 grid), attack. Otherwise move closer.
         if dist <= 1.5:
             # Attack
-            action = {
-                "character_id": turn_char_id,
-                "action_type": "attack",
-                "target_id": enemy_id,
-            }
             display.console.print(f"  [{my_name}] Attacks {nearest.get('name', '?')}!")
             try:
-                result = client.submit_action(action)
+                result = client.submit_action({
+                    "action_type": "attack",
+                    "target_id": enemy_id,
+                })
                 display.print_action_result(result)
             except TendrilsAPIError as e:
                 display.print_error(e.message)
 
             # End turn after attacking
             time.sleep(delay)
-            _auto_end_turn(client, session, turn_char_id)
+            _auto_end_turn(client)
         else:
             # Move toward enemy
             speed = me.get("speed", 30)
@@ -581,17 +474,15 @@ def _auto_play_loop(
             target = _move_toward(my_pos, enemy_pos, max_squares)
 
             display.console.print(f"  [{my_name}] Moves to ({target[0]}, {target[1]})")
-            action = {
-                "character_id": turn_char_id,
-                "action_type": "move",
-                "target_position": target,
-            }
             try:
-                result = client.submit_action(action)
+                result = client.submit_action({
+                    "action_type": "move",
+                    "target_position": target,
+                })
                 display.print_action_result(result)
             except TendrilsAPIError as e:
                 display.print_error(e.message)
-                _auto_end_turn(client, session, turn_char_id)
+                _auto_end_turn(client)
                 time.sleep(delay)
                 continue
 
@@ -599,9 +490,9 @@ def _auto_play_loop(
 
             # After moving, check if now adjacent and can attack
             try:
-                state2 = client.get_state(turn_char_id)
+                state2 = client.get_state()
             except TendrilsAPIError:
-                _auto_end_turn(client, session, turn_char_id)
+                _auto_end_turn(client)
                 time.sleep(delay)
                 continue
 
@@ -619,29 +510,24 @@ def _auto_play_loop(
                 new_dist = _dist(new_pos, ep)
                 if new_dist <= 1.5 and state2.get("is_your_turn"):
                     display.console.print(f"  [{my_name}] Attacks {nearest.get('name', '?')}!")
-                    attack_action = {
-                        "character_id": turn_char_id,
-                        "action_type": "attack",
-                        "target_id": enemy_id,
-                    }
                     try:
-                        attack_result = client.submit_action(attack_action)
+                        attack_result = client.submit_action({
+                            "action_type": "attack",
+                            "target_id": enemy_id,
+                        })
                         display.print_action_result(attack_result)
                     except TendrilsAPIError as e:
                         display.print_error(e.message)
 
-            _auto_end_turn(client, session, turn_char_id)
+            _auto_end_turn(client)
 
         time.sleep(delay)
 
 
-def _auto_end_turn(client: TendrilsClient, session: GameSession, char_id: str):
-    """End a character's turn, ignoring errors."""
+def _auto_end_turn(client: TendrilsClient):
+    """End the current turn, ignoring errors."""
     try:
-        client.submit_action({
-            "character_id": char_id,
-            "action_type": "end_turn",
-        })
+        client.submit_action({"action_type": "end_turn"})
     except TendrilsAPIError:
         pass
 

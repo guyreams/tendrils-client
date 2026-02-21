@@ -13,9 +13,12 @@ class TendrilsAPIError(Exception):
 
 
 class TendrilsClient:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, token: str):
         self.base_url = base_url.rstrip("/")
-        self.http = httpx.Client(timeout=30.0)
+        self.http = httpx.Client(
+            timeout=30.0,
+            headers={"Authorization": f"Bearer {token}"},
+        )
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"
@@ -55,11 +58,8 @@ class TendrilsClient:
         resp = self.http.post(self._url("/game/start"))
         return self._handle_response(resp)
 
-    def get_state(self, character_id: str) -> dict:
-        resp = self.http.get(
-            self._url("/game/state"),
-            params={"character_id": character_id},
-        )
+    def get_state(self) -> dict:
+        resp = self.http.get(self._url("/game/state"))
         return self._handle_response(resp)
 
     def submit_action(self, action_data: dict) -> dict:

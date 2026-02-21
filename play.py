@@ -19,9 +19,14 @@ def main():
         default=DEFAULT_SERVER,
         help=f"Server URL (default: {DEFAULT_SERVER})",
     )
+    parser.add_argument(
+        "--token",
+        required=True,
+        help="API key for authentication (e.g. sk_...)",
+    )
     args = parser.parse_args()
 
-    client = TendrilsClient(args.server)
+    client = TendrilsClient(args.server, args.token)
     session = GameSession()
 
     # Ping server
@@ -35,15 +40,15 @@ def main():
     display.console.print()
     display.print_banner(info)
     display.console.print(f"\nConnected to {args.server}")
-    display.console.print("Type 'help' for commands, 'demo' for a quick match.\n")
+    display.console.print("Type 'help' for commands.\n")
 
     # Main loop
     try:
         while True:
             # Context-aware prompt
-            if session.game_status == "active" and session.active_character:
+            if session.game_status == "active" and session.has_character:
                 try:
-                    state = client.get_state(session.active_character)
+                    state = client.get_state()
 
                     status = state.get("status", "")
                     if status == "completed" or (status == "waiting" and state.get("winner_id")):
