@@ -210,11 +210,10 @@ def print_help():
     table.add_column("Action", style="white")
 
     table.add_row("[bold]Game Setup[/bold]", "")
-    table.add_row("new / create", "Create a new game")
     table.add_row("join <preset>", "Join as fighter, rogue, barbarian, or monk")
     table.add_row("join custom", "Interactive character builder")
     table.add_row("start", "Start combat")
-    table.add_row("games", "Show current game info")
+    table.add_row("game", "Show current game info")
     table.add_row("", "")
 
     table.add_row("[bold]Combat[/bold]", "")
@@ -270,16 +269,8 @@ def print_winner(name: str, hp: int, max_hp: int, rounds: int):
 
 def prompt(session) -> str:
     """Context-aware input prompt."""
-    if session.game_id is None:
-        prefix = "tendrils"
-    elif session.game_status == "waiting":
-        short_id = session.game_id[:8] if len(session.game_id) > 8 else session.game_id
-        prefix = f"tendrils [{short_id}]"
-    else:
-        prefix = "tendrils"
-
     try:
-        return input(f"{prefix}> ").strip()
+        return input("tendrils> ").strip()
     except EOFError:
         return "quit"
 

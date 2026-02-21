@@ -41,9 +41,9 @@ def main():
     try:
         while True:
             # Context-aware prompt
-            if session.game_status == "active" and session.game_id and session.active_character:
+            if session.game_status == "active" and session.active_character:
                 try:
-                    state = client.get_state(session.game_id, session.active_character)
+                    state = client.get_state(session.active_character)
 
                     status = state.get("status", "")
                     if status == "completed":

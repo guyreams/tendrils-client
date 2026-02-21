@@ -107,13 +107,11 @@ PRESETS = {
 
 class GameSession:
     def __init__(self):
-        self.game_id: str | None = None
         self.characters: dict[str, dict] = {}  # owner_id -> {character_id, name, owner_id}
         self.active_character: str | None = None  # character_id currently controlled
         self.game_status: str | None = None  # waiting, active, completed
 
     def reset(self):
-        self.game_id = None
         self.characters.clear()
         self.active_character = None
         self.game_status = None
