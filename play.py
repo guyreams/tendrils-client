@@ -12,19 +12,11 @@ from cli import display
 DEFAULT_SERVER = "https://web-production-969c8.up.railway.app"
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Tendrils CLI Client")
-    parser.add_argument(
-        "--server",
-        default=DEFAULT_SERVER,
-        help=f"Server URL (default: {DEFAULT_SERVER})",
-    )
-    parser.add_argument(
-        "--token",
-        required=True,
-        help="API key for authentication (e.g. sk_...)",
-    )
-    args = parser.parse_args()
+def game_main(args):
+    """Run the interactive game client."""
+    if not args.token:
+        print("Error: --token is required for game mode.", file=sys.stderr)
+        sys.exit(1)
 
     client = TendrilsClient(args.server, args.token)
     session = GameSession()
@@ -73,6 +65,48 @@ def main():
         display.console.print("\n[dim]Goodbye![/dim]")
     finally:
         client.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Tendrils CLI Client")
+    parser.add_argument(
+        "--server",
+        default=DEFAULT_SERVER,
+        help=f"Server URL (default: {DEFAULT_SERVER})",
+    )
+    parser.add_argument(
+        "--token",
+        default=None,
+        help="API key for authentication (e.g. sk_...)",
+    )
+    parser.add_argument(
+        "--admin",
+        action="store_true",
+        help="Launch admin panel instead of game client",
+    )
+    parser.add_argument(
+        "--admin-secret",
+        default=None,
+        help="Admin secret for admin mode",
+    )
+    args = parser.parse_args()
+
+    if args.admin:
+        from cli.admin import admin_main
+
+        secret = args.admin_secret
+        if not secret:
+            try:
+                secret = input("Admin secret: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                sys.exit(0)
+            if not secret:
+                print("Error: admin secret is required.", file=sys.stderr)
+                sys.exit(1)
+
+        admin_main(args.server, secret)
+    else:
+        game_main(args)
 
 
 if __name__ == "__main__":
