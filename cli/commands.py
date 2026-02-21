@@ -310,6 +310,18 @@ def _cmd_map(client: TendrilsClient, session: GameSession):
 
 def _cmd_log(client: TendrilsClient, session: GameSession):
     events = client.get_log()
+    if not events:
+        # Log is archived after combat ends; fall back to combat history
+        try:
+            history = client.get_history()
+            if history:
+                # Show the most recent combat log
+                latest = history[-1] if isinstance(history, list) else history
+                events = latest.get("events", latest.get("log", []))
+                if events:
+                    display.console.print("[dim](Showing last combat log)[/dim]")
+        except TendrilsAPIError:
+            pass
     display.print_log(events)
 
 
@@ -408,7 +420,11 @@ def _update_session_from_state(state: dict, session: GameSession):
     """Update session status from a state response."""
     status = state.get("status")
     if status:
-        session.game_status = status
+        # Server auto-transitions completed→waiting, so winner_id in waiting means game over
+        if status == "waiting" and state.get("winner_id"):
+            session.game_status = "completed"
+        else:
+            session.game_status = status
 
 
 def _check_game_over(client: TendrilsClient, session: GameSession):
@@ -418,7 +434,8 @@ def _check_game_over(client: TendrilsClient, session: GameSession):
         state = client.get_state(char_id)
         _update_session_from_state(state, session)
 
-        if state.get("status") == "completed":
+        status = state.get("status")
+        if status == "completed" or (status == "waiting" and state.get("winner_id")):
             _print_game_result(state, client, session)
     except TendrilsAPIError:
         pass
@@ -427,7 +444,9 @@ def _check_game_over(client: TendrilsClient, session: GameSession):
 def _print_game_result(state: dict, client: TendrilsClient, session: GameSession):
     """Print the winner and final summary."""
     session.game_status = "completed"
-    characters = _all_characters(state)
+    # _all_characters works with /game/state responses; fall back to
+    # the "characters" list from /game responses.
+    characters = _all_characters(state) or state.get("characters", [])
     round_num = state.get("round_number", state.get("round", 0))
     winner_id = state.get("winner_id")
 
@@ -435,7 +454,8 @@ def _print_game_result(state: dict, client: TendrilsClient, session: GameSession
     winner = None
     if winner_id:
         for c in characters:
-            if c.get("id") == winner_id:
+            cid = c.get("id") or c.get("character_id")
+            if cid == winner_id:
                 winner = c
                 break
 
@@ -475,13 +495,22 @@ def _auto_play_loop(
         for cid in char_ids:
             try:
                 s = client.get_state(cid)
-            except TendrilsAPIError as e:
-                display.print_error(e.message)
+            except TendrilsAPIError:
+                # Character may no longer exist after combat reset;
+                # check if the game ended via get_game().
+                try:
+                    game = client.get_game()
+                    if game.get("winner_id"):
+                        _print_game_result(game, client, session)
+                        return
+                except TendrilsAPIError:
+                    pass
                 continue
 
             _update_session_from_state(s, session)
 
-            if s.get("status") == "completed":
+            s_status = s.get("status")
+            if s_status == "completed" or (s_status == "waiting" and s.get("winner_id")):
                 _print_game_result(s, client, session)
                 return
 
@@ -495,11 +524,12 @@ def _auto_play_loop(
             time.sleep(delay)
             continue
 
-        # Round header
+        # Round header + status summary
         round_num = state.get("round_number", state.get("round", 0))
         if isinstance(round_num, int) and round_num > last_round:
             last_round = round_num
             display.print_round_header(round_num)
+            display.print_state(state)
 
         # Get all characters
         characters = _all_characters(state)

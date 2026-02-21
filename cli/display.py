@@ -49,13 +49,16 @@ def print_state(state: dict):
     if not characters:
         return
 
+    my_id = mine.get("id") if mine else None
     for char in characters:
-        _print_hp_bar(char)
+        _print_hp_bar(char, is_you=(char.get("id") == my_id))
     console.print()
 
 
-def _print_hp_bar(char: dict):
+def _print_hp_bar(char: dict, is_you: bool = False):
     name = char.get("name", "?")
+    if is_you:
+        name += " (you)"
     hp = char.get("current_hp", char.get("hp", 0))
     max_hp = char.get("max_hp", hp)
     pos = char.get("position", [0, 0])
@@ -151,6 +154,9 @@ def print_map(state: dict):
         console.print("[dim]No characters to display.[/dim]")
         return
 
+    mine = state.get("your_character")
+    my_id = mine.get("id") if mine else None
+
     positions = {}
     legend = []
     for char in characters:
@@ -171,7 +177,7 @@ def print_map(state: dict):
                     label = c
                     break
         positions[(x, y)] = label
-        legend.append((label, name, hp, max_hp))
+        legend.append((label, name, hp, max_hp, char.get("id") == my_id))
 
     # Calculate bounds with padding
     xs = [p[0] for p in positions]
@@ -198,8 +204,9 @@ def print_map(state: dict):
 
     # Legend
     console.print()
-    for label, name, hp, max_hp in legend:
-        console.print(f"  [bold yellow]{label}[/bold yellow] = {name} ({hp}/{max_hp} HP)")
+    for label, name, hp, max_hp, is_you in legend:
+        you_tag = " [bold cyan](you)[/bold cyan]" if is_you else ""
+        console.print(f"  [bold yellow]{label}[/bold yellow] = {name} ({hp}/{max_hp} HP){you_tag}")
     console.print()
 
 

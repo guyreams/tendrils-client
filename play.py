@@ -46,7 +46,7 @@ def main():
                     state = client.get_state(session.active_character)
 
                     status = state.get("status", "")
-                    if status == "completed":
+                    if status == "completed" or (status == "waiting" and state.get("winner_id")):
                         session.game_status = "completed"
                         cmd = display.prompt(session)
                     else:

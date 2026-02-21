@@ -70,5 +70,9 @@ class TendrilsClient:
         resp = self.http.get(self._url("/game/log"))
         return self._handle_response(resp)
 
+    def get_history(self) -> list:
+        resp = self.http.get(self._url("/game/history"))
+        return self._handle_response(resp)
+
     def close(self):
         self.http.close()
