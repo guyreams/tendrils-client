@@ -18,6 +18,7 @@ MENU = """
 [bold cyan]4.[/bold cyan] Update user name
 [bold cyan]5.[/bold cyan] Rotate user token
 [bold cyan]6.[/bold cyan] Delete user
+[bold cyan]7.[/bold cyan] Change admin secret
 [bold cyan]0.[/bold cyan] Exit
 """
 
@@ -127,6 +128,20 @@ def _action_delete(client: AdminClient):
         console.print("  [yellow]In-game character was also removed.[/yellow]")
 
 
+def _action_change_secret(client: AdminClient):
+    new_secret = _input("New admin secret")
+    if not new_secret:
+        return
+
+    confirm = _input("Change admin secret? This takes effect immediately (y/N)")
+    if confirm.lower() != "y":
+        console.print("  [dim]Cancelled.[/dim]")
+        return
+
+    result = client.change_secret(new_secret)
+    console.print(f"\n  [green]{result['message']}[/green]")
+
+
 # ── Main Loop ───────────────────────────────────────────────────────────────
 
 ACTIONS = {
@@ -136,6 +151,7 @@ ACTIONS = {
     "4": ("Update user name", _action_update),
     "5": ("Rotate user token", _action_rotate),
     "6": ("Delete user", _action_delete),
+    "7": ("Change admin secret", _action_change_secret),
 }
 
 

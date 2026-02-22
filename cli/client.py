@@ -144,5 +144,15 @@ class AdminClient:
         resp = self.http.delete(self._url(f"/admin/users/{owner_id}"))
         return self._handle_response(resp)
 
+    def change_secret(self, new_secret: str) -> dict:
+        resp = self.http.put(
+            self._url("/admin/secret"),
+            json={"new_secret": new_secret},
+        )
+        result = self._handle_response(resp)
+        # Update header so subsequent requests use the new secret
+        self.http.headers["X-Admin-Secret"] = new_secret
+        return result
+
     def close(self):
         self.http.close()
